@@ -1,0 +1,205 @@
+PROGRAM MABTRL
+--Translating from G-Code to KAREL
+
+
+--Definition of Variables:
+VAR
+
+fileR, fileWr: FILE
+
+str: STRING[50]
+g_string, x_string, y_string, z_string, f_string, s_string, m_string: STRING[8]
+g,x,y,z,f,s,m: STRING[1]
+
+X1, X2, Y1, Y2, Z1, Z2, Switch :INTEGER
+M_INDEX,M_ORD,M_POS,digLength,g_No,m_No: INTEGER
+xPos, yPos, zPos, s_No, f_No: REAL
+
+STATUS:INTEGER
+Home, updatePos:XYZWPR
+nonflip:CONFIG
+
+--Definition of Routines:
+
+
+ROUTINE PosLim
+BEGIN
+  IF (updatePos.x >= X1) OR (updatePos.x <= X2) THEN
+    Switch = 0
+  ELSE
+    IF (updatePos.y >= Y1) OR (updatePos.y <= Y2) THEN
+      Switch = 0
+    ELSE
+      IF (updatePos.z >= Z1) OR (updatePos.z <= Z2) THEN
+        Switch = 0
+      ELSE
+          Switch = 1  
+      ENDIF
+    ENDIF
+  ENDIF
+END PosLim
+
+
+BEGIN
+CNV_STR_CONF('F U T, 0, 1, 0',nonflip,STATUS)
+$MNUFRAMENUM[1]=2
+$MNUTOOLNUM[1]=3
+$GROUP[1].$UFRAME=$MNUFRAME[1,$MNUFRAMENUM[1]]
+$GROUP[1].$UTOOL=$MNUTOOL[1,$MNUTOOLNUM[1]]
+$MOTYPE=LINEAR
+$TERMTYPE=COARSE
+$SPEED=1000
+OPEN FILE fileR ('RO','RD:mabGcode.txt')
+OPEN FILE fileWr ('Rw', 'RD:mabWrite.txt')
+READ fileR (str)
+--WRITE fileWr (str)
+m_No = 0
+
+X1=1000
+X2=0
+	 
+Y1=500
+Y2=0
+	 
+Z1=300
+Z2=0
+	 
+Switch = 1
+
+--Defining the character variables of the text file as strings until the G-Code has not ended by a 'M02' command.
+WHILE m_No<>2 DO
+  g='G'
+  x='X'
+  y='Y'
+  z='Z'
+  f='F'
+  s='S'
+  m='M'
+
+--Finding and reading the 'G' characters and the digits in front of them
+  IF INDEX(str,g)>0 THEN                --This function searchs for "g" string in "str",which is from the read G-Code file
+                                        --If it finds g, the output is its location, otherwise, the output is zero
+    M_INDEX=INDEX(str,g)
+    M_POS=M_INDEX
+    M_ORD=ORD(str,M_INDEX)              --giving ASCI code of the intended character related to its location in "str" string
+    WHILE M_ORD<>32 DO                  --finding and reading process continous until it reachs a space --ASCI code of 32
+      M_INDEX=M_INDEX+1
+      M_ORD=ORD(str,M_INDEX)
+    ENDWHILE
+    digLength=M_INDEX-M_POS-1           --Finding the lenght of digits in front of "G" character in G-Code
+    g_string=SUB_STR(str,M_POS+1,digLength)               --giving a string contain the digits in front of the "G" character
+    CNV_STR_INT(g_string,g_No)          --This function converts a string to integer
+  ENDIF
+
+--Finding and reading the 'X' characters and the digits in front of them
+  IF INDEX(str,x)>0 THEN
+    M_INDEX=INDEX(str,x)
+    M_POS=M_INDEX
+    M_ORD=ORD(str,M_INDEX)
+    WHILE M_ORD<>32 DO
+      M_INDEX=M_INDEX+1
+      M_ORD=ORD(str,M_INDEX)
+    ENDWHILE
+    digLength=M_INDEX-M_POS-1
+    x_string=SUB_STR(str,M_POS+1,digLength)
+    CNV_STR_REAL(x_string,xPos)         --This function converts a string to real number
+  ENDIF
+
+--Finding and reading the 'Y' characters and the digits in front of them
+  IF INDEX(str,y)>0 THEN
+    M_INDEX=INDEX(str,y)
+    M_POS=M_INDEX
+    M_ORD=ORD(str,M_INDEX)
+    WHILE M_ORD<>32 DO
+      M_INDEX=M_INDEX+1
+      M_ORD=ORD(str,M_INDEX)
+    ENDWHILE
+    digLength=M_INDEX-M_POS-1
+    y_string=SUB_STR(str,M_POS+1,digLength)
+    CNV_STR_REAL(y_string,yPos)
+  ENDIF
+
+--Finding and reading the 'Z' characters and the digits in front of them
+  IF INDEX(str,z)>0 THEN
+    M_INDEX=INDEX(str,z)
+    M_POS=M_INDEX
+    M_ORD=ORD(str,M_INDEX)
+    WHILE M_ORD<>32 DO
+      M_INDEX=M_INDEX+1
+      M_ORD=ORD(str,M_INDEX)
+    ENDWHILE
+    digLength=M_INDEX-M_POS-1
+    z_string=SUB_STR(str,M_POS+1,digLength)
+    CNV_STR_REAL(z_string,zPos)
+  ENDIF
+
+--Finding and reading the 'F' characters and the digits in front of them
+  IF INDEX(str,f)>0 THEN
+    M_INDEX=INDEX(str,f)
+    M_POS=M_INDEX
+    M_ORD=ORD(str,M_INDEX)
+    WHILE M_ORD<>32 DO
+      M_INDEX=M_INDEX+1
+      M_ORD=ORD(str,M_INDEX)
+    ENDWHILE
+    digLength=M_INDEX-M_POS-1
+    f_string=SUB_STR(str,M_POS+1,digLength)
+    CNV_STR_REAL(f_string,f_No)
+  ENDIF
+
+--Finding and reading the 'S' characters and the digits in front of them
+  IF INDEX(str,s)>0 THEN
+    M_INDEX=INDEX(str,s)
+    M_POS=M_INDEX
+    M_ORD=ORD(str,M_INDEX)
+    WHILE M_ORD<>32 DO
+      M_INDEX=M_INDEX+1
+      M_ORD=ORD(str,M_INDEX)
+    ENDWHILE
+    digLength=M_INDEX-M_POS-1
+    s_string=SUB_STR(str,M_POS+1,digLength)
+    CNV_STR_REAL(s_string,s_No)
+  ENDIF
+
+--Finding and reading the 'M' characters and the digits in front of them
+  IF INDEX(str,m)>0 THEN
+    M_INDEX=INDEX(str,m)
+    M_POS=M_INDEX
+    M_ORD=ORD(str,M_INDEX)
+    WHILE M_ORD<>32 DO
+      M_INDEX=M_INDEX+1
+      M_ORD=ORD(str,M_INDEX)
+    ENDWHILE
+    digLength=M_INDEX-M_POS-1
+    m_string=SUB_STR(str,M_POS+1,digLength)
+    CNV_STR_INT(m_string,m_No)
+  ENDIF
+  
+Home=POS( 500.0, 767.0 , 200.0 , 0.0 , 0.0 , 0.0 , NonFlip )
+-- making decision to continoue program or not based on the position limitation routine
+  PosLim
+  IF (Switch = 0) THEN
+	  MOVE TO Home
+  ELSE
+          updatePos=POS(xPos,yPos,zPos,0,0,0,nonflip)
+          WRITE fileWr(xPos,yPos,zPos,0,0,0)
+
+          IF g_No=0 THEN
+            WITH $SPEED=1000 MOVE TO updatePos
+          ELSE
+            WITH $TERMTYPE=FINE, $SPEED=f_No MOVE TO updatePos
+          ENDIF	 
+
+  ENDIF  
+
+READ fileR (str)
+--WRITE fileWr (str)
+  
+ENDWHILE
+
+CLOSE FILE fileR
+CLOSE FILE fileWr
+
+END MABTRL
+
+
