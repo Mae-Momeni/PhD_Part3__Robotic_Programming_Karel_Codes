@@ -1,0 +1,261 @@
+PROGRAM MABMIG
+
+
+--Definition of Arrays:
+TYPE
+array_3 = ARRAY[3] OF INTEGER
+array_5 = ARRAY[5] OF INTEGER
+
+--Definition of Variables:
+VAR
+L_array, Th_array, H_array, Ag_array, V_array, WFS_array: array_3
+Sp_array: array_5
+
+
+Home, InitialPos, CurrentPos, Tmpp:XYZWPR
+i: INTEGER
+MXdis, MZdis :INTEGER
+X1, X2, Y1, Y2, Z1, Z2 :INTEGER
+VoltC, WFSC, Switch :INTEGER
+STATUS:INTEGER
+NonFlip:CONFIG
+
+
+
+--Definition of Routines:
+
+-- This routine is used for safety limits-- continue of the program if the destination be in the acceptable range
+-- stopping the process and going to home position if the destination position be out of allowed range
+ROUTINE PosLim
+    BEGIN
+          IF (CurrentPos.x >= X1) OR (CurrentPos.x <= X2) THEN
+              Switch = 0
+          ELSE
+              IF (CurrentPos.y >= Y1) OR (CurrentPos.y <= Y2) THEN
+                  Switch = 0
+              ELSE
+                  IF (CurrentPos.z >= Z1) OR (CurrentPos.z <= Z2) THEN
+                      Switch = 0
+                  ELSE
+                      Switch = 1  
+                  ENDIF
+               ENDIF
+           ENDIF
+END PosLim
+
+-- By this routine, the welding torch goes near the welding starting point 
+ROUTINE Initializing
+    BEGIN
+          $SPEED=Sp_array[4]
+          $MOTYPE=LINEAR
+          MOVE NEAR CurrentPos BY (-25) 
+		  $SPEED=Sp_array[5]
+		  --DOUT[38]=ON
+		  MOVE TO CurrentPos
+		  --DOUT[38]=OFF  
+END Initializing
+
+
+ROUTINE Welding
+    BEGIN
+          DOUT[36]=OFF       
+          --AOUT[3]=WFSC                    
+          --AOUT[4]=VoltC                                            
+		  DOUT[33]=ON       --Contactor
+		  DELAY 1000                        
+		  --DOUT[38]=OFF       --touch sensor 
+		  MOVE TO CurrentPos
+		  DOUT[36]=OFF
+		  --DOUT[38]=OFF
+		  DOUT[33]=OFF 
+		  --AOUT[3]=0                      
+		  --AOUT[4]=0
+END Welding
+
+-- This routine is used to remain a distance in the x-direction between the first, second, and third welding passes.
+ROUTINE FreeMovement
+    BEGIN
+          CurrentPos.x=(CurrentPos.x-MXdis) 
+		  $SPEED=Sp_array[5]
+		  $MOTYPE=LINEAR
+		  MOVE TO CurrentPos
+		  CurrentPos.x=(CurrentPos.x+MXdis) 
+		  MOVE TO CurrentPos
+		  CurrentPos.z=(CurrentPos.z-MZdis)
+		  MOVE TO CurrentPos
+END FreeMovement
+
+-- Routine for returning of robot arm to Home position after the process
+ROUTINE Finishing
+    BEGIN
+          $SPEED=Sp_array[5]    
+          MOVE AWAY (-50)
+          $SPEED=Sp_array[4]
+          MOVE TO Home
+END Finishing
+
+ 
+BEGIN
+  CNV_STR_CONF('N U T, 0, 0, 0',NonFlip,STATUS)
+  $MNUFRAMENUM[1]=2
+  $MNUTOOLNUM[1]=2
+  $GROUP[1].$UFRAME=$MNUFRAME[1,$MNUFRAMENUM[1]] 
+  $GROUP[1].$UTOOL=$MNUTOOL[1,$MNUTOOLNUM[1]]
+
+
+-- setting the initial values
+	 FOR i=1 TO 3 DO
+	    Th_array[i]=6
+     ENDFOR 
+     
+	 FOR i=1 TO 3 DO
+	    L_array[i]=100
+     ENDFOR
+	 
+	 FOR i=1 TO 3 DO
+	    H_array[i]=18
+     ENDFOR
+	 
+	 FOR i=1 TO 3 DO
+	    Ag_array[i]=10
+     ENDFOR
+	 
+	 FOR i=1 TO 3 DO
+	    V_array[i]=25
+     ENDFOR        
+     
+	 Sp_array[1] = 100
+	 Sp_array[2] = 200
+	 Sp_array[3] = 300
+	 Sp_array[4] = 400
+	 Sp_array[5] = 50
+	 
+	 WFS_array[1] = 550
+	 WFS_array[2] = 660
+	 WFS_array[3] = 550
+	 
+     MXdis=100	 --mm
+     MZdis=100	 --mm
+	 
+	 X1=1650
+	 X2=750
+	 
+	 Y1=800
+	 Y2=400
+	 
+	 Z1=300
+	 Z2=0
+	 
+	 Switch = 1
+	
+     WFSC=WFS_array[1]                   
+     VoltC=V_array[1]
+	 
+     Home=POS( 500.0, 767.0 , 200.0 , 0.0 , 0.0 , 0.0 , NonFlip ) 
+     InitialPos=POS( 827.0, 627 , 60 , 0.0 , 0.0 , 0.0 , NonFlip ) 
+     CurrentPos=InitialPos
+     --AOUT[3]=((WFS*4)-400) -- WFS     0 a max 2047  21 -> 593 mm/s
+     --AOUT[4]=(Voltage*40) -- Volts   0 a max 2047  10 -> 44 volts 
+     --  AOUT[3]=550                     
+     --  AOUT[4]=1000 
+
+   
+  --Starting of program                      
+  $SPEED=Sp_array[4]     
+  $MOTYPE=LINEAR
+  MOVE TO Home
+    
+  CurrentPos.z=(CurrentPos.z + Th_array[1]  + H_array[1])             --Adjusting the height of the torch
+  CurrentPos.p=Ag_array[1]                 --Adjusting the angle of the torch
+  
+-- making decision to continoue program or not based on the position limitation routine
+PosLim
+  IF (Switch = 0) THEN
+	  MOVE TO Home
+  ELSE
+	  Initializing
+	  
+	  CurrentPos.x=(CurrentPos.x+L_array[1])               --Adjusting the welding lenght
+	  PosLim
+	  IF (Switch = 0) THEN
+	     MOVE TO Home
+	  ELSE
+	     $SPEED=Sp_array[1]
+		 Welding
+		 CurrentPos.z=(CurrentPos.z+MZdis) 
+		 CurrentPos.x=(CurrentPos.x+MXdis)
+
+        --checking the FreeMovement routine by the following PosLim routine
+         PosLim               
+         IF (Switch = 0) THEN
+	        MOVE TO Home
+         ELSE
+	        FreeMovement
+	     ENDIF
+	  ENDIF	 
+  ENDIF
+  
+
+  -- Continuing the welding process if the robot arm has not returned to the Home position in the previous steps    
+  IF (Switch = 1) THEN	   
+	   DELAY 2000
+	   WFSC=WFS_array[2]                   
+       VoltC=V_array[2]
+	   CurrentPos.z=(CurrentPos.z - Th_array[1] - H_array[1])	   
+	   CurrentPos.z=(CurrentPos.z + Th_array[2] + H_array[2])
+	   CurrentPos.p=Ag_array[2]
+	   PosLim
+	   IF (Switch = 0) THEN
+		  MOVE TO Home
+	   ELSE
+		  MOVE TO CurrentPos
+		  
+		  CurrentPos.x=(CurrentPos.x+L_array[2])
+		  PosLim
+		  IF (Switch = 0) THEN
+			 MOVE TO Home
+		  ELSE
+			 $SPEED=Sp_array[2]
+			 Welding
+			 CurrentPos.z=(CurrentPos.z+MZdis) 
+     		 CurrentPos.x=(CurrentPos.x+MXdis)
+             PosLim
+             IF (Switch = 0) THEN
+	             MOVE TO Home
+             ELSE
+	             FreeMovement
+	         ENDIF
+		  ENDIF	 
+	  ENDIF
+  ENDIF
+  
+        
+
+   IF (Switch = 1) THEN
+	   WFSC=WFS_array[3]                   
+       VoltC=V_array[3]
+	   DELAY 2000
+	   CurrentPos.z=(CurrentPos.z - Th_array[2] - H_array[2])	   
+	   CurrentPos.z=(CurrentPos.z + Th_array[3] + H_array[3])
+	   CurrentPos.p=Ag_array[3]
+	   PosLim
+	   IF (Switch = 0) THEN
+		  MOVE TO Home
+	   ELSE
+		  MOVE TO CurrentPos
+		  
+		  CurrentPos.x=(CurrentPos.x+L_array[3])
+		  PosLim
+		  IF (Switch = 0) THEN
+			 MOVE TO Home
+		  ELSE
+			 $SPEED=Sp_array[3]
+			 Welding
+		  ENDIF	 
+	  ENDIF
+   ENDIF 
+   
+   Finishing
+
+
+END MABMIG
